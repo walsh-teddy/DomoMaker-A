@@ -58,28 +58,3 @@ redisClient.connect().then(() => {
     console.log(`Listening on port ${port}`);
   });
 });
-
-// Rerout the user to the login screen if they havent logged in yet
-const requireLogin = (req, res, next) => {
-  // Check if there is an account attatched to their session (they are logged in)
-  if (!req.session.account) { // They haven't logged in
-    return res.redirect('/');
-  }
-  // If they did log in, then do the next middleware function
-  return next();
-};
-
-// Rerout the user to the app screen if they have logged in but not out
-const requireLogout = (req, res, next) => {
-  // Check if there is an account attached to their session (they are logged in)
-  if (req.session.account) { // They are logged in
-    return res.redirect('/maker');
-  }
-  // If they logged out, then do the next middleware function
-  return next();
-};
-
-// Rerout the user to https if they arent using it (bypass it if we're testing locally)
-const requireSecure = (req, res, next) => {
-  next();
-};
