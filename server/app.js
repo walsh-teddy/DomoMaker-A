@@ -1,4 +1,5 @@
 // Load in all nescesary files
+require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const compression = require('compression');
@@ -8,6 +9,8 @@ const mongoose = require('mongoose');
 const expressHandlebars = require('express-handlebars');
 const helmet = require('helmet');
 const session = require('express-session');
+const RedisStore = require('connect-redis').default;
+const redis = require('redis');
 
 const router = require('./router.js');
 
@@ -18,30 +21,65 @@ mongoose.connect(dbURI).catch((err) => {
   console.log('Could not connect to database');
   throw err;
 });
-
-// Set up the app
-const app = express();
-
-app.use(helmet());
-app.use('/assets', express.static(path.resolve(`${__dirname}/../hosted/`)));
-app.use(favicon(`${__dirname}/../hosted/img/favicon.png`));
-app.use(compression());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(session({
-  key: 'sessionid',
-  secret: 'Domo Arigato',
-  resave: false,
-  saveUninitialized: false,
-}));
-app.engine('handlebars', expressHandlebars.engine({ defaultLayout: '' }));
-app.set('view engine', 'handlebars');
-app.set('views', `${__dirname}/../views`);
-
-router(app);
-
-// Start the server
-app.listen(port, (err) => {
-  if (err) { throw err; }
-  console.log(`Listening on port ${port}`);
+const redisClient = redis.createClient({
+  url: process.env.REDISCLOUD_URL,
 });
+redisClient.on('error', (err) => console.log('Redis Client Error', err));
+// Connect to the redis client and only do anything else once this is done
+// (can't do await at the top level)
+redisClient.connect().then(() => {
+  // Set up the app
+  const app = express();
+
+  app.use(helmet());
+  app.use('/assets', express.static(path.resolve(`${__dirname}/../hosted/`)));
+  app.use(favicon(`${__dirname}/../hosted/img/favicon.png`));
+  app.use(compression());
+  app.use(bodyParser.urlencoded({ extended: true }));
+  app.use(bodyParser.json());
+  app.use(session({
+    key: 'sessionid',
+    store: new RedisStore({
+      client: redisClient,
+    }),
+    secret: 'Domo Arigato',
+    resave: false,
+    saveUninitialized: false,
+  }));
+  app.engine('handlebars', expressHandlebars.engine({ defaultLayout: '' }));
+  app.set('view engine', 'handlebars');
+  app.set('views', `${__dirname}/../views`);
+
+  router(app);
+
+  // Start the server
+  app.listen(port, (err) => {
+    if (err) { throw err; }
+    console.log(`Listening on port ${port}`);
+  });
+});
+
+// Rerout the user to the login screen if they havent logged in yet
+const requireLogin = (req, res, next) => {
+  // Check if there is an account attatched to their session (they are logged in)
+  if (!req.session.account) { // They haven't logged in
+    return res.redirect('/');
+  }
+  // If they did log in, then do the next middleware function
+  return next();
+};
+
+// Rerout the user to the app screen if they have logged in but not out
+const requireLogout = (req, res, next) => {
+  // Check if there is an account attached to their session (they are logged in)
+  if (req.session.account) { // They are logged in
+    return res.redirect('/maker');
+  }
+  // If they logged out, then do the next middleware function
+  return next();
+};
+
+// Rerout the user to https if they arent using it (bypass it if we're testing locally)
+const requireSecure = (req, res, next) => {
+  next();
+};
