@@ -21,7 +21,7 @@ const requireLogout = (req, res, next) => {
 // Rerout the user to https if they arent using it
 const requireSecure = (req, res, next) => {
   // test if they're running on HTTPS
-  if (req.headers['x-forwarded-pronto'] !== 'https') { // They are not running on HTTPS
+  if (req.headers['x-forwarded-proto'] !== 'https') { // They are not running on HTTPS
     // Redirect them to the same URL but on HTTPS
     return res.redirect(`https://${req.hostname}${req.url}`);
   }
